@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forge Operating Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 14mm 15mm; }
+  :root {
+    --ink: #16181d;
+    --mid: #4a5058;
+    --soft: #767d87;
+    --rule: #d8dce2;
+    --wash: #f4f6f8;
+    --accent: #1f4ea8;
+    --warn: #8a3a1a;
+    --good: #1c6b43;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: var(--sans); color: var(--ink); font-size: 9.6pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3 { line-height: 1.2; margin: 0; }
+  h1 { font-size: 27pt; letter-spacing: -0.5pt; font-weight: 700; }
+  h2 { font-size: 13pt; margin: 17pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5pt solid var(--ink); letter-spacing: -0.2pt; }
+  h3 { font-size: 10.4pt; margin: 12pt 0 3pt; }
+  h2:first-of-type { margin-top: 0; }
+  p { margin: 0 0 6pt; }
+  code { font-family: var(--mono); font-size: 8.6pt; background: var(--wash); padding: 0.5pt 2.5pt; border-radius: 2pt; }
+  pre { font-family: var(--mono); font-size: 8.3pt; background: var(--wash); border-left: 2.5pt solid var(--accent);
+        padding: 6pt 8pt; margin: 6pt 0; white-space: pre-wrap; line-height: 1.42; border-radius: 0 3pt 3pt 0; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 8pt; font-size: 8.8pt; }
+  th { text-align: left; border-bottom: 1pt solid var(--ink); padding: 3.5pt 6pt 3.5pt 0; font-size: 8pt;
+       text-transform: uppercase; letter-spacing: 0.4pt; color: var(--mid); font-weight: 600; }
+  td { border-bottom: 0.5pt solid var(--rule); padding: 4pt 6pt 4pt 0; vertical-align: top; }
+  td:last-child, th:last-child { padding-right: 0; }
+  .page { page-break-after: auto; }
+  .cover { page-break-after: always; }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  table, pre, .say, .note, .ok, .flow, .two { break-inside: avoid; page-break-inside: avoid; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  ul, ol { break-inside: avoid; page-break-inside: avoid; }
+  .cover { padding-top: 32mm; }
+  .cover .sub { font-size: 12.5pt; color: var(--mid); margin-top: 7pt; max-width: 118mm; line-height: 1.42; }
+  .cover .meta { margin-top: 30mm; font-size: 8.6pt; color: var(--soft); border-top: 0.5pt solid var(--rule); padding-top: 7pt; }
+  .cover .meta b { color: var(--ink); font-weight: 600; }
+  .flow b { color: var(--accent); font-weight: 700; }
+  .flow { font-family: var(--mono); font-size: 7.1pt; line-height: 1.7; color: var(--mid); white-space: pre;
+          background: var(--wash); padding: 9pt 10pt; margin: 9pt 0; border-radius: 3pt; overflow: hidden; }
+  .lede { font-size: 10.6pt; color: var(--mid); margin-bottom: 10pt; line-height: 1.45; }
+  .note { border-left: 2.5pt solid var(--warn); background: #fdf7f3; padding: 6pt 9pt; margin: 8pt 0; font-size: 9pt; }
+  .ok { border-left: 2.5pt solid var(--good); background: #f2f9f5; padding: 6pt 9pt; margin: 8pt 0; font-size: 9pt; }
+  .say { border-left: 2.5pt solid var(--accent); background: #f3f6fc; padding: 6pt 9pt; margin: 7pt 0; }
+  .say p { margin: 0 0 3pt; }
+  .say .q { font-family: var(--mono); font-size: 8.5pt; color: var(--accent); }
+  .say .why { font-size: 8.4pt; color: var(--mid); margin: 0; }
+  ol, ul { margin: 4pt 0 7pt; padding-left: 15pt; }
+  li { margin-bottom: 3pt; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14pt; }
+  .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.1pt; color: var(--accent); font-weight: 700; margin-bottom: 5pt; }
+  .foot { margin-top: 14pt; border-top: 0.5pt solid var(--rule); padding-top: 6pt; font-size: 8pt; color: var(--soft); }
+  .tag { font-family: var(--mono); font-size: 7.6pt; background: var(--ink); color: #fff; padding: 1pt 4pt; border-radius: 2pt; }
+  .tag.adv { background: var(--warn); }
+  .tag.str { background: var(--good); }
+  strong { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ───────────────────────────── COVER ───────────────────────────── -->
+<section class="page cover">
+  <div class="kicker">Operating Guide</div>
+  <h1>Forge</h1>
+  <p class="sub">An engineering process for AI coding sessions: research, architecture, plan, tests, code, review, evidence. Enforced by hooks, not by the model remembering to behave.</p>
+
+  <div class="flow">request --> research --> architecture --> <b>plan</b> --> tests --> code --> review --> <b>evidence</b>
+                                              gate opens here               claim becomes provable</div>
+
+  <table>
+    <tr><td style="width:34mm"><strong>Installed</strong></td><td>globally, in <code>~/.claude</code>. Every project on this machine gets the gates.</td></tr>
+    <tr><td><strong>Mode</strong></td><td><span class="tag adv">advisory</span> by default. <code>forge strict on</code> per project to make gates block.</td></tr>
+    <tr><td><strong>Tested</strong></td><td>56 assertions, all passing. Hooks driven with real event JSON, not mocks.</td></tr>
+    <tr><td><strong>Repos</strong></td><td>github.com/rafiulislam4246/forge &nbsp;·&nbsp; .../continuum</td></tr>
+  </table>
+
+  <div class="meta">
+    <b>Read this first:</b> page 2 explains what was actually wrong with your setup, because the
+    repos were never the missing piece. Pages 3 to 5 are the daily loop. Page 6 is the
+    maximum-power section: the exact phrases that get the most out of it.
+  </div>
+</section>
+
+<!-- ───────────────────────────── DIAGNOSIS ───────────────────────────── -->
+<section class="page">
+  <h2>1. What was actually broken</h2>
+  <p class="lede">Your setup stopped enforcing engineering on 1 November. Not gradually: on that date, in three specific ways.</p>
+
+  <table>
+    <tr><th style="width:52mm">Found on your machine</th><th>What it meant</th></tr>
+    <tr><td><code>~/.claude/skills/</code> held 6 entries; 63 skills sat in <code>skills-library/</code></td><td>Only those 6 were auto-discoverable. The library never loads on its own.</td></tr>
+    <tr><td><code>/stack</code> had <code>disable-model-invocation: true</code></td><td>Claude <strong>could not</strong> call the router itself. Unless you typed <code>/stack</code>, zero skills loaded. Ever.</td></tr>
+    <tr><td><code>skills_DELETED_2026-11-01/</code> held 22 skills</td><td>Including test-driven-development, planning-and-task-breakdown, code-review-and-quality, documentation-and-adrs, api-and-interface-design, debugging-and-error-recovery, incremental-implementation.</td></tr>
+    <tr><td><code>_disabled_skills/</code> held 17 more</td><td>Including spec-driven-development, source-driven-development, browser-testing-with-devtools, frontend-ui-engineering.</td></tr>
+    <tr><td><code>settings.json</code> → <code>"hooks"</code> absent</td><td>No deterministic enforcement of anything. Every rule depended on the model recalling it mid-task.</td></tr>
+    <tr><td>4 agents defined, nothing invoking them</td><td>code-reviewer, test-engineer, security-auditor, web-performance-auditor all idle.</td></tr>
+  </table>
+
+  <p>So the complaints line up exactly. <strong>No research, no plan, no architecture file</strong> because those skills were deleted. <strong>Says OK then the UI is broken</strong> because browser-testing was disabled and nothing required evidence. <strong>Fix one bug, get another</strong> because no regression gate existed. <strong>Forgets the project</strong> because nothing re-injected context.</p>
+
+  <div class="note"><strong>The structural lesson.</strong> "Use TDD" in a CLAUDE.md is a suggestion. A rule only holds if something outside the conversation checks it. That is what the seven hooks do, and it is the one layer no GitHub repo ships properly.</div>
+
+  <h2>2. What is now installed</h2>
+  <table>
+    <tr><th style="width:38mm">Layer</th><th>What</th><th style="width:30mm">Where</th></tr>
+    <tr><td>Discipline skills</td><td>16 restored, auto-triggering: TDD, planning, spec-driven, source-driven, API design, ADRs, code review, doubt-driven, debugging, browser testing, frontend, shipping, simplification, context engineering, interview-me, incremental</td><td><code>~/.claude/skills/</code></td></tr>
+    <tr><td>Forge skills</td><td>5: router, intake, build, audit, verify</td><td><code>~/.claude/skills/</code></td></tr>
+    <tr><td>Enforcement</td><td>7 hooks</td><td><code>~/.claude/forge/hooks/</code></td></tr>
+    <tr><td>CLI</td><td><code>forge</code>, POSIX sh, no dependencies</td><td><code>~/.local/bin/forge</code></td></tr>
+    <tr><td>Router fixed</td><td><code>/stack</code> is now model-invocable</td><td><code>~/.claude/skills/stack/</code></td></tr>
+    <tr><td>Artifacts</td><td>per project, on <code>forge init</code></td><td><code>docs/engineering/</code></td></tr>
+  </table>
+  <p>Your <code>settings.json</code> was backed up and merged: all 11 keys, 13 permissions and 2 MCP servers intact, with 7 hook entries added.</p>
+
+</section>
+
+<!-- ───────────────────────────── THE GATES ───────────────────────────── -->
+<section class="page">
+  <h2>3. The seven hooks, and what each one catches</h2>
+  <table>
+    <tr><th style="width:26mm">Hook</th><th style="width:30mm">Fires on</th><th>Catches</th></tr>
+    <tr><td>session-start</td><td><code>SessionStart</code> incl. <code>compact</code></td><td>A session starting blind. Injects the contract, the active plan, the current task, gate state, recent evidence. Re-fires after compaction, so a long session recovers.</td></tr>
+    <tr><td>prompt</td><td><code>UserPromptSubmit</code></td><td>A build request answered by typing code. With no plan open, the research-first rule lands next to your prompt.</td></tr>
+    <tr><td>pre-edit</td><td><code>PreToolUse</code> Edit/Write</td><td><strong>The plan gate.</strong> Product code before a plan. Advisory, or denied outright in strict mode.</td></tr>
+    <tr><td>post-bash</td><td><code>PostToolUse</code> Bash</td><td>Unverifiable claims. Every test, build, lint and browser command is classified and logged with its result. A failure is reported back as the project's current state.</td></tr>
+    <tr><td>reanchor</td><td><code>PostToolUse</code> Edit/Write</td><td><strong>Mid-session drift.</strong> Every 8th edit, re-injects the current task and the out-of-scope list.</td></tr>
+    <tr><td>stop</td><td><code>Stop</code></td><td>End of turn: code changed with no passing run, or UI changed with nobody having looked at it.</td></tr>
+    <tr><td>task-complete</td><td><code>TaskCompleted</code></td><td>Completion without proof. Exit 2 blocks it in strict mode.</td></tr>
+  </table>
+
+  <h3>The three gates you can check yourself</h3>
+<pre><code>forge gate code   # is there a plan with real tasks
+forge gate done   # is there passing evidence newer than the last edit
+forge gate ui     # did UI change without browser verification</code></pre>
+
+  <p>Two details that make these honest rather than decorative:</p>
+  <ul>
+    <li><strong>Placeholders do not count.</strong> A task line still containing <code>&lt;angle brackets&gt;</code> is scaffold. The gate stays shut until real file paths, tests and commands replace them, so it cannot be opened by generating the template.</li>
+    <li><strong>The done gate compares timestamps, not claims.</strong> Evidence recorded before the last edit proves nothing about the code as it stands now. Edit after a passing run and the gate closes again.</li>
+  </ul>
+
+  <h3>Never gated</h3>
+  <p>Tests, docs, markdown, config, <code>.forge/</code>, <code>.claude/</code>, scripts, and anything outside your code directories. There is always a legal next move: writing the plan or the test it demands is never blocked.</p>
+
+  <div class="ok"><strong>Escape hatch, by design.</strong> A genuinely trivial fix: <code>forge waive 30 "typo in the error string"</code>. Thirty minutes, and the bypass is written to the ledger. The point is not to prevent bypassing, it is to prevent bypassing <em>silently</em>.</div>
+
+  <h2>4. Advisory versus strict</h2>
+  <table>
+    <tr><th style="width:24mm">Mode</th><th>Behaviour</th><th>Use for</th></tr>
+    <tr><td><span class="tag adv">advisory</span></td><td>Gates inject a warning. Nothing is ever blocked.</td><td>Default. Client work, exploration, anything where an interruption costs more than a skipped step.</td></tr>
+    <tr><td><span class="tag str">strict</span></td><td>Plan gate <em>denies</em> the edit. TaskCompleted blocks. </td><td>A project where quality has actually bitten you. Start with one.</td></tr>
+  </table>
+  <p>Recommendation: run advisory everywhere for a week, read the ledger, then turn strict on for the one project where the warnings were right most often.</p>
+
+</section>
+
+<!-- ───────────────────────────── DAILY LOOP ───────────────────────────── -->
+<section class="page">
+  <h2>5. The four loops</h2>
+  <p class="lede">Four situations, four openings. Each one is a sentence you type, not a command you memorise: the skills trigger on what you say.</p>
+
+  <h3>A. A brand new project</h3>
+<pre><code>cd ~/Work/new-thing &amp;&amp; forge init
+# then in Claude Code:
+"here is the brief: &lt;paste&gt;. set this project up."</code></pre>
+  <p>What happens: <code>forge-intake</code> interviews you, fills a 14-line completeness checklist, asks at most seven questions in one batch with recommended defaults, shows you the assumptions it would build on, and <strong>stops</strong>. Nothing is generated until you say OK. On your approval it writes the README, the folder structure, CLAUDE.md, .gitignore, .env.example, the test runner with one passing test, the ADRs for the stack decisions, and the first workstream's research, architecture, plan and test-plan. Then it runs <code>forge verify</code> to prove the skeleton builds.</p>
+  <div class="note"><strong>This is the behaviour you asked for.</strong> If it starts generating files before you approve, say "you have not shown me the completeness report" and it will stop. The gate is in the skill, and the skill is now auto-loading.</div>
+
+  <h3>B. An existing project, new feature</h3>
+<pre><code>cd ~/Work/review-engine &amp;&amp; forge init    # once per project
+# then:
+"add &lt;feature&gt;. research first."</code></pre>
+  <p>Research reads <em>your</em> codebase before designing, which is what stops a second implementation being built beside the one that already exists. Architecture names the rejected alternatives. The plan gate opens only when tasks carry real file paths and real verification commands.</p>
+
+  <h3>C. An audit of something that already exists</h3>
+<pre><code>forge audit
+# then:
+"audit this project. scope first, reproduce every finding."</code></pre>
+  <p>Scope and severity are declared before any code is read, so the audit cannot drift into a tour. Eleven systematic passes: cold start, tests, correctness, error paths, auth, secrets, data, UI in a real browser, performance, observability, dependencies. Every finding needs a reproduction; anything that cannot be demonstrated becomes a note, not a finding. <strong>It reports, it does not fix</strong>, then turns findings into an ordered remediation plan you approve.</p>
+
+  <h3>D. A bug that keeps coming back</h3>
+<pre><code>"this is still broken: &lt;symptom&gt;. root cause, not symptom."</code></pre>
+  <p><code>debugging-and-error-recovery</code> loads, finds the cause, and the fix becomes a small workstream <em>with a test asserting the bug</em>. A bug fixed without that test is a bug waiting to return, which is the mechanism behind "we fixed this already".</p>
+
+  <h2>6. Command reference</h2>
+  <div class="two">
+    <div>
+<pre><code>forge init
+forge kickoff "&lt;project&gt;"
+forge new "&lt;title&gt;"
+forge list
+forge use &lt;slug&gt;
+forge status
+forge brief
+forge anchor</code></pre>
+    </div>
+    <div>
+<pre><code>forge verify [test|build]
+forge evidence add &lt;kind&gt; \
+  &lt;pass|fail&gt; "&lt;cmd&gt;" "&lt;what&gt;"
+forge evidence list
+forge gate {code|done|ui}
+forge waive &lt;min&gt; "&lt;why&gt;"
+forge adr "&lt;decision&gt;"
+forge audit
+forge strict [on|off]
+forge doctor</code></pre>
+    </div>
+  </div>
+  <p>Evidence kinds: <code>test</code> <code>build</code> <code>lint</code> <code>browser</code> <code>api</code> <code>manual</code> <code>verify</code>. If <code>forge verify</code> says no commands detected, give the project a definition of working, once:</p>
+<pre><code>// .forge/config.json
+{ "verify": { "test": "pnpm test", "build": "pnpm build" } }</code></pre>
+
+</section>
+
+<!-- ───────────────────────────── MAX POWER ───────────────────────────── -->
+<section class="page">
+  <h2>7. Maximum power: what to say</h2>
+  <p class="lede">The gates stop the worst outcomes on their own. Getting the <em>best</em> outcome is still about what you ask for. These are the phrases that change the result most, and why each one works.</p>
+
+  <div class="say"><p class="q">"research first, then show me the architecture before you write anything"</p><p class="why">Forces phases 1 and 2 to be visible and approvable. Most bad builds are bad decisions made silently at minute two, and this is the cheapest moment to catch one.</p></div>
+
+  <div class="say"><p class="q">"show me the plan, I want to approve the tasks before you start"</p><p class="why">You review 10 lines instead of 400. A wrong task is seconds to fix; wrong code is an hour.</p></div>
+
+  <div class="say"><p class="q">"what did you actually run? paste the output"</p><p class="why">The single highest-value sentence in this entire guide. It converts a claim into evidence, and the ledger means the answer can be checked.</p></div>
+
+  <div class="say"><p class="q">"test counts before and after"</p><p class="why">"Tests pass" hides a regression. Two numbers cannot.</p></div>
+
+  <div class="say"><p class="q">"open it in a browser and click every element you touched"</p><p class="why">Your recurring complaint, answered directly. Tests do not catch a button wired to nothing or a section that renders empty because the data shape changed.</p></div>
+
+  <div class="say"><p class="q">"review this with a fresh subagent, do not tell it your reasoning"</p><p class="why">The author is the worst reviewer of their own work. An unanchored reviewer finds what the author cannot see.</p></div>
+
+  <div class="say"><p class="q">"what is still unverified?"</p><p class="why">Surfaces the honest gap instead of a confident summary. Ask it before you believe anything is done.</p></div>
+
+  <div class="say"><p class="q">"is this in the plan? if not, stop"</p><p class="why">Cuts scope sprawl the moment you notice it, and amends the plan rather than letting the change drift.</p></div>
+
+  <h3>Three habits that compound</h3>
+  <ol>
+    <li><strong>Read <code>forge status</code> before you start.</strong> Five seconds. It tells you where the last session actually stopped and which gates are red, before you add anything on top.</li>
+    <li><strong>Make it tick tasks off as they pass.</strong> The re-anchor hook reads <code>plan.md</code>. A stale plan produces a confidently wrong anchor, which is worse than none.</li>
+    <li><strong>Grow the pitfalls file.</strong> Every time something bites, one entry. This is the part that makes month three cheaper than month one.</li>
+  </ol>
+
+  <h2>8. When a gate fires</h2>
+  <table>
+    <tr><th style="width:44mm">Gate</th><th>Right response</th></tr>
+    <tr><td>Plan gate, real work</td><td>Stop and plan. The gate is working.</td></tr>
+    <tr><td>Plan gate, trivial fix</td><td><code>forge waive 30 "&lt;why&gt;"</code>. One command, recorded.</td></tr>
+    <tr><td>Evidence gate</td><td><code>forge verify</code>. If it cannot run here, say which part is unverified.</td></tr>
+    <tr><td>UI gate</td><td>Drive the actual page, then <code>forge evidence add browser pass …</code>.</td></tr>
+    <tr><td>Post-bash reports a failure</td><td>Believe the ledger over the summary. Root cause before anything else.</td></tr>
+  </table>
+  <div class="note"><strong>One thing to watch for.</strong> If a session ever writes product code somewhere the hook does not look in order to get around a gate, that is a serious failure, not a clever workaround. Tell it so, and turn strict on for that project.</div>
+
+</section>
+
+<!-- ───────────────────────────── WEEK ONE + TROUBLE ───────────────────────────── -->
+<section class="page">
+  <h2>9. Your first week</h2>
+  <table>
+    <tr><th style="width:20mm">Day</th><th>Do this</th></tr>
+    <tr><td>Today</td><td>Install the plugins the gates expect to work beside (next section). Run <code>forge init</code> in your two or three most active projects. Nothing else.</td></tr>
+    <tr><td>Day 2</td><td>Run one real feature through the full pipeline, start to finish, and read every artifact it produces. This is where you decide whether the templates ask the right questions for your work.</td></tr>
+    <tr><td>Day 3</td><td><code>forge audit</code> on one existing project. Expect the findings to be uncomfortable; that is the point.</td></tr>
+    <tr><td>Day 4</td><td>Give every active project a verify command in <code>.forge/config.json</code>. A project with none has no definition of working.</td></tr>
+    <tr><td>Day 5</td><td>Read the ledgers. <code>forge evidence list</code> in each project. Turn <code>strict on</code> where the warnings were right most often.</td></tr>
+  </table>
+
+  <h2>10. The plugins worth adding</h2>
+  <p>Forge is the process and the enforcement. These add specialists, and they install from inside Claude Code with <code>/plugin</code>. Star counts verified against the GitHub API, not blog posts.</p>
+  <table>
+    <tr><th style="width:52mm">Install</th><th>Gives you</th></tr>
+    <tr><td><code>/plugin marketplace add obra/superpowers</code><br><code>/plugin install superpowers@superpowers</code></td><td>315K stars. The same methodology with worktree isolation and subagent-per-task review. Your old <code>sp-*</code> skills were stripped copies of this.</td></tr>
+    <tr><td><code>/plugin install pr-review-toolkit@claude-plugins-official</code></td><td>Six review agents. One is <code>silent-failure-hunter</code>, which is your "says OK but it is broken" problem by name.</td></tr>
+    <tr><td><code>/plugin install feature-dev@claude-plugins-official</code></td><td><code>code-explorer</code> and <code>code-architect</code> agents for the research and architecture phases.</td></tr>
+    <tr><td><code>/plugin install playwright@claude-plugins-official</code></td><td>Real browser control. This is what makes the UI gate enforceable rather than aspirational.</td></tr>
+    <tr><td><code>npx openspec init</code> (per project)</td><td>74K stars. Living specs in <code>openspec/</code> if you want specs versioned separately from workstreams. Optional: Forge's artifacts already cover most of it.</td></tr>
+  </table>
+  <div class="note"><strong>Do not stack ECC (300K stars) on top of superpowers.</strong> Both are full harnesses with their own hooks and its own README says to pick one path. Forge sits under either.</div>
+
+  <h2>11. Troubleshooting</h2>
+  <table>
+    <tr><th style="width:52mm">Symptom</th><th>Fix</th></tr>
+    <tr><td>Gates never fire</td><td><code>forge doctor</code>. Needs <code>.forge/</code> in the project and <code>forge-</code> entries in a settings.json.</td></tr>
+    <tr><td><code>forge: command not found</code></td><td>Add <code>~/.local/bin</code> to PATH, or call <code>~/.claude/forge/bin/forge</code>.</td></tr>
+    <tr><td>Plan gate will not open</td><td>Remove <code>_pending_</code> <em>and</em> replace the <code>&lt;placeholders&gt;</code> in task lines. Check with <code>forge gate code</code>.</td></tr>
+    <tr><td>Nudges feel too frequent</td><td><code>FORGE_COOLDOWN_MIN=30</code>, <code>FORGE_ANCHOR_EVERY=15</code>.</td></tr>
+    <tr><td>Evidence ledger has a wrong entry</td><td><code>forge evidence clear</code>, then <code>forge verify</code> for a clean baseline.</td></tr>
+    <tr><td>Want it gone</td><td><code>./uninstall.sh --global</code>. Settings are stripped of forge entries only; your artifacts stay.</td></tr>
+  </table>
+
+  <h2>12. What is deliberately not here</h2>
+  <ul>
+    <li><strong>No embeddings or vector search.</strong> A handful of curated files read on demand beats retrieval that returns plausible fragments. Retrieval failure is silent; a missing file is not.</li>
+    <li><strong>No background daemon.</strong> Every state change comes from a hook or a command you ran, so the state is always explainable.</li>
+    <li><strong>No blocking by default.</strong> A process that fights you on day one gets uninstalled on day two.</li>
+  </ul>
+
+  <div class="foot">Forge Operating Guide · github.com/rafiulislam4246/forge · MIT · page 6</div>
+</section>
+
+</body>
+</html>

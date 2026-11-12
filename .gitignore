@@ -1,0 +1,7 @@
+.DS_Store
+*.tmp.*
+*.forge-backup*
+
+# This repo is the tool, so it carries no project state of its own.
+# In YOUR project, commit docs/engineering/ so the record travels with the repo.
+.forge/

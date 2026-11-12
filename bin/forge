@@ -1,0 +1,634 @@
+#!/bin/sh
+# forge - engineering gates and artifacts for AI coding sessions.
+# POSIX sh. The CLI owns the deterministic parts: artifact scaffolding, the
+# evidence ledger, and the gates the hooks consult. The skills own the thinking.
+
+set -eu
+
+VERSION="1.0.0"
+DOCS_REL="docs/engineering"
+
+# ------------------------------------------------------------------- locate
+
+find_root() {
+  if [ -n "${FORGE_PROJECT:-}" ]; then printf '%s\n' "$FORGE_PROJECT"; return 0; fi
+  dir=$(pwd)
+  while [ "$dir" != "/" ]; do
+    if [ -d "$dir/.forge" ]; then printf '%s\n' "$dir"; return 0; fi
+    dir=$(dirname "$dir")
+  done
+  # not initialised: fall back to the git root, else cwd
+  if r=$(git rev-parse --show-toplevel 2>/dev/null); then printf '%s\n' "$r"; return 0; fi
+  printf '%s\n' "$(pwd)"
+}
+
+P=""; F=""; D=""
+resolve() {
+  P=$(find_root); F="$P/.forge"; D="$P/$DOCS_REL"
+}
+need_init() {
+  resolve
+  [ -d "$F" ] || { printf 'forge: not initialised here. Run `forge init` in %s\n' "$P" >&2; exit 3; }
+}
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+epoch() { date -u +%s; }
+
+mtime() {
+  [ -e "$1" ] || { printf '0'; return; }
+  m=$(date -u -r "$1" +%s 2>/dev/null) && [ -n "$m" ] && { printf '%s' "$m"; return; }
+  m=$(stat -f %m "$1" 2>/dev/null) && [ -n "$m" ] && { printf '%s' "$m"; return; }
+  m=$(stat -c %Y "$1" 2>/dev/null) && [ -n "$m" ] && { printf '%s' "$m"; return; }
+  printf '0'
+}
+
+slug() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g; s/--*/-/g; s/^-//; s/-$//' | cut -c1-48
+}
+
+cfg_get() {
+  python3 - "$F/config.json" "$1" <<'PY' 2>/dev/null || printf ''
+import json,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception: d={}
+v=d.get(sys.argv[2],"")
+print(v if not isinstance(v,bool) else ("true" if v else "false"))
+PY
+}
+
+cfg_set() {
+  python3 - "$F/config.json" "$1" "$2" <<'PY'
+import json,sys,os
+p,k,v=sys.argv[1],sys.argv[2],sys.argv[3]
+try: d=json.load(open(p))
+except Exception: d={}
+if v in ("true","false"): d[k] = (v=="true")
+else: d[k]=v
+json.dump(d, open(p,"w"), indent=2)
+PY
+}
+
+is_strict() { [ "$(cfg_get strict)" = "true" ]; }
+
+# ---------------------------------------------------------------------- init
+
+cmd_init() {
+  resolve
+  mkdir -p "$F" "$D/adr"
+  [ -f "$F/evidence.log" ] || printf '# iso\tkind\tstatus\tcommand\tsummary\n' > "$F/evidence.log"
+  if [ ! -f "$F/config.json" ]; then
+    cat > "$F/config.json" <<EOF
+{
+  "version": "$VERSION",
+  "project": "$(basename "$P")",
+  "created": "$(now)",
+  "strict": false,
+  "ui_globs": "src/components app/ components/ pages/ views/ ui/ *.tsx *.jsx *.vue *.svelte",
+  "code_globs": "src/ app/ lib/ server/ api/ convex/ packages/ components/"
+}
+EOF
+  fi
+  t=$(tpl_dir)
+  if [ ! -f "$D/README.md" ]; then
+    if [ -n "$t" ] && [ -f "$t/INDEX.md" ]; then cp "$t/INDEX.md" "$D/README.md"
+    else printf '# Engineering\n\nWorkstreams live in numbered folders. ADRs in `adr/`.\n' > "$D/README.md"; fi
+  fi
+  printf 'forge: initialised\n  %s\n  %s\n' "$F" "$D"
+  printf 'forge: strict mode is OFF (gates advise). Turn on with: forge strict on\n'
+}
+
+tpl_dir() {
+  self=$0
+  case $self in
+    */*) base=$(cd "$(dirname "$self")/.." 2>/dev/null && pwd) ;;
+    *) base="" ;;
+  esac
+  if [ -n "$base" ] && [ -d "$base/templates" ]; then printf '%s\n' "$base/templates"
+  elif [ -d "$F/.templates" ]; then printf '%s\n' "$F/.templates"
+  else printf '\n'; fi
+}
+
+# --------------------------------------------------------------- workstreams
+
+next_num() {
+  n=$(ls -1 "$D" 2>/dev/null | sed -n 's/^\([0-9][0-9][0-9]\)-.*/\1/p' | sort | tail -1)
+  [ -z "$n" ] && { printf '001'; return; }
+  n=$(printf '%s' "$n" | sed 's/^0*//'); [ -z "$n" ] && n=0
+  printf '%03d' $((n + 1))
+}
+
+cmd_new() {
+  need_init
+  [ $# -ge 1 ] || { printf 'usage: forge new "<title>"\n' >&2; exit 2; }
+  title=$*
+  s=$(slug "$title")
+  dir="$D/$(next_num)-$s"
+  mkdir -p "$dir"
+  t=$(tpl_dir)
+  for f in research architecture plan test-plan review; do
+    [ -f "$dir/$f.md" ] && continue
+    if [ -n "$t" ] && [ -f "$t/workstream/$f.md" ]; then
+      TITLE="$title" python3 - "$t/workstream/$f.md" "$dir/$f.md" <<'PY'
+import os,sys
+src,dst=sys.argv[1],sys.argv[2]
+open(dst,"w").write(open(src).read().replace("{{TITLE}}", os.environ.get("TITLE","Untitled")))
+PY
+    else
+      printf '# %s - %s\n\n_pending_\n' "$f" "$title" > "$dir/$f.md"
+    fi
+  done
+  printf '%s' "$(basename "$dir")" > "$F/active"
+  printf '%s\n' "$(basename "$dir")"
+  printf 'forge: created %s/%s\n' "$DOCS_REL" "$(basename "$dir")" >&2
+  printf 'forge: active workstream set. Next: fill research.md (no product code until plan.md has tasks).\n' >&2
+}
+
+active_slug() { [ -f "$F/active" ] && cat "$F/active" || printf ''; }
+active_dir() { a=$(active_slug); [ -n "$a" ] && printf '%s/%s' "$D" "$a" || printf ''; }
+
+cmd_use() {
+  need_init
+  [ $# -ge 1 ] || { printf 'usage: forge use <slug>\n' >&2; exit 2; }
+  m=$(ls -1 "$D" 2>/dev/null | grep -- "$1" | head -1 || true)
+  [ -n "$m" ] || { printf 'forge: no workstream matching "%s"\n' "$1" >&2; exit 1; }
+  printf '%s' "$m" > "$F/active"
+  printf 'forge: active -> %s\n' "$m"
+}
+
+cmd_list() {
+  need_init
+  a=$(active_slug)
+  ls -1 "$D" 2>/dev/null | grep -E '^[0-9]{3}-|^audit-' | while read -r w; do
+    mark="  "; [ "$w" = "$a" ] && mark="->"
+    tasks=$(task_count "$D/$w/plan.md")
+    donet=$(task_count "$D/$w/plan.md" done)
+    printf '%s %-40s plan: %s/%s tasks\n' "$mark" "$w" "$donet" "$tasks"
+  done
+  [ -z "$(ls -1 "$D" 2>/dev/null | grep -E '^[0-9]{3}-' || true)" ] && printf '(no workstreams yet: forge new "<title>")\n'
+  return 0
+}
+
+# ---------------------------------------------------------------------- intake
+
+# Opens the intake for a new project. Creates the brief and the completeness
+# checklist and nothing else: the skeleton is generated only after the user
+# approves the brief, which is the whole point of the intake gate.
+cmd_kickoff() {
+  resolve
+  [ -d "$F" ] || cmd_init >/dev/null
+  resolve
+  name=${*:-$(basename "$P")}
+  dir="$D/000-intake"
+  mkdir -p "$dir"
+  t=$(tpl_dir)
+  for f in brief intake; do
+    [ -f "$dir/$f.md" ] && continue
+    if [ -n "$t" ] && [ -f "$t/kickoff/$f.md" ]; then
+      TITLE="$name" python3 - "$t/kickoff/$f.md" "$dir/$f.md" <<'PY'
+import os,sys
+open(sys.argv[2],"w").write(open(sys.argv[1]).read().replace("{{TITLE}}", os.environ.get("TITLE","Untitled")))
+PY
+    else
+      printf '# %s - %s\n\n_pending_\n' "$f" "$name" > "$dir/$f.md"
+    fi
+  done
+  printf '000-intake' > "$F/active"
+  cat <<EOF
+forge: intake opened for "$name"
+  $DOCS_REL/000-intake/brief.md    <- the user's brief, verbatim, then your reading of it
+  $DOCS_REL/000-intake/intake.md   <- completeness checklist: known / assumed / missing
+
+Nothing else is generated yet. Fill the brief, mark the checklist, ask the
+missing questions in one batch, show the completeness report, and wait for the
+user to approve before creating any README, folder or plan.
+EOF
+}
+
+# ------------------------------------------------------------------ evidence
+
+ev_add() { # kind status command summary
+  printf '%s\t%s\t%s\t%s\t%s\n' "$(now)" "$1" "$2" "$(printf '%s' "$3" | tr '\t\n' '  ')" "$(printf '%s' "$4" | tr '\t\n' '  ' | cut -c1-200)" >> "$F/evidence.log"
+}
+
+cmd_evidence() {
+  need_init
+  sub=${1:-list}; shift 2>/dev/null || true
+  case $sub in
+    add)
+      [ $# -ge 3 ] || { printf 'usage: forge evidence add <kind> <pass|fail> "<command>" ["<summary>"]\n' >&2; exit 2; }
+      k=$1; st=$2; c=$3; shift 3
+      ev_add "$k" "$st" "$c" "${*:-}"
+      printf 'forge: evidence recorded (%s %s)\n' "$k" "$st"
+      ;;
+    list)
+      tail -20 "$F/evidence.log"
+      ;;
+    clear)
+      printf '# iso\tkind\tstatus\tcommand\tsummary\n' > "$F/evidence.log"
+      printf 'forge: evidence cleared\n'
+      ;;
+    *) printf 'usage: forge evidence {add|list|clear}\n' >&2; exit 2 ;;
+  esac
+}
+
+# Newest passing evidence of a kind, as an epoch. 0 if none.
+ev_latest_pass() {
+  kinds=$1
+  KINDS="$kinds" python3 - "$F/evidence.log" <<'PY'
+import os,sys,datetime
+kinds=set(os.environ["KINDS"].split("|"))
+best=0
+try: lines=open(sys.argv[1]).read().splitlines()
+except Exception: lines=[]
+for ln in lines:
+    if ln.startswith("#"): continue
+    p=ln.split("\t")
+    if len(p)<3: continue
+    if p[1] in kinds and p[2]=="pass":
+        try:
+            t=datetime.datetime.strptime(p[0],"%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+            best=max(best,int(t.timestamp()))
+        except Exception: pass
+print(best)
+PY
+}
+
+# ---------------------------------------------------------------------- gates
+
+waiver_active() {
+  [ -f "$F/.waiver" ] || return 1
+  u=$(cut -f1 "$F/.waiver" 2>/dev/null || printf 0)
+  [ -n "$u" ] || return 1
+  [ "$(epoch)" -lt "$u" ]
+}
+
+cmd_waive() {
+  need_init
+  mins=${1:-30}; shift 2>/dev/null || true
+  reason=${*:-"small change"}
+  printf '%s\t%s\n' "$(( $(epoch) + mins * 60 ))" "$reason" > "$F/.waiver"
+  ev_add waiver pass "forge waive $mins" "$reason"
+  printf 'forge: plan gate waived for %s minutes (%s)\n' "$mins" "$reason"
+}
+
+# A real task, not a template placeholder: a checkbox line with no <angle
+# bracket> left in it. Without this the gate opens on the scaffold itself,
+# which would make it theatre.
+# Definition-of-done checkboxes are acceptance criteria, not tasks, so that one
+# section is skipped. Everything else counts, so a task added anywhere in the
+# file is seen. The scaffold still yields zero, because its placeholders carry <>.
+task_count() { # file [done_only]
+  [ -f "$1" ] || { printf '0'; return; }
+  ONLY=${2:-all} awk '
+    /^## / { skip = ($0 ~ /[Dd]efinition of done/) ; next }
+    !skip && /^[[:space:]]*- \[[ x]\]/ && $0 !~ /</ {
+      if (ENVIRON["ONLY"] != "done" || $0 ~ /- \[x\]/) c++
+    }
+    END { print c+0 }
+  ' "$1"
+}
+
+plan_ready() { # 0 if the active plan has at least one real task
+  dir=$(active_dir)
+  [ -n "$dir" ] || return 1
+  [ -f "$dir/plan.md" ] || return 1
+  grep -q '_pending_' "$dir/plan.md" && return 1
+  [ "$(task_count "$dir/plan.md")" -ge 1 ]
+}
+
+changed_ui() { # 0 if the working tree has UI-ish changes
+  git -C "$P" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  git -C "$P" status --porcelain 2>/dev/null \
+    | awk '{ $1=""; print }' \
+    | grep -qiE '\.(tsx|jsx|vue|svelte|css|scss)$|/(components|pages|views|ui|app)/' || return 1
+  return 0
+}
+
+cmd_gate() {
+  need_init
+  which=${1:-code}
+  case $which in
+    code)
+      if waiver_active; then printf 'pass: waiver active (%s)\n' "$(cut -f2 "$F/.waiver")"; exit 0; fi
+      a=$(active_slug)
+      if [ -z "$a" ]; then
+        printf 'fail: no active workstream. Run: forge new "<what you are building>"\n'; exit 1
+      fi
+      if ! plan_ready; then
+        printf 'fail: %s/%s/plan.md has no real tasks yet. Remove the _pending_ marker and replace the <placeholders> in the task lines with actual files, tests and commands.\n' "$DOCS_REL" "$a"; exit 1
+      fi
+      printf 'pass: plan ready for %s\n' "$a"; exit 0
+      ;;
+    done)
+      le=$(mtime "$F/.last-edit")
+      ep=$(ev_latest_pass "test|verify")
+      if [ "$ep" -eq 0 ]; then
+        printf 'fail: no passing test evidence on record. Run: forge verify\n'; exit 1
+      fi
+      if [ "$le" -gt "$ep" ]; then
+        printf 'fail: code changed after the last passing run. Re-run: forge verify\n'; exit 1
+      fi
+      printf 'pass: evidence newer than the last edit\n'; exit 0
+      ;;
+    ui)
+      if ! changed_ui; then printf 'pass: no UI changes pending\n'; exit 0; fi
+      le=$(mtime "$F/.last-edit")
+      eb=$(ev_latest_pass "browser")
+      if [ "$eb" -eq 0 ] || [ "$le" -gt "$eb" ]; then
+        printf 'fail: UI changed with no browser verification since. Drive the real UI and record it: forge evidence add browser pass "<how>" "<what you saw>"\n'; exit 1
+      fi
+      printf 'pass: browser evidence present\n'; exit 0
+      ;;
+    *) printf 'usage: forge gate {code|done|ui}\n' >&2; exit 2 ;;
+  esac
+}
+
+cmd_strict() {
+  need_init
+  case ${1:-} in
+    on)  cfg_set strict true;  printf 'forge: strict ON. The plan gate now blocks edits, and completion needs evidence.\n' ;;
+    off) cfg_set strict false; printf 'forge: strict OFF. Gates advise instead of blocking.\n' ;;
+    *)   printf 'strict: %s\n' "$(cfg_get strict)" ;;
+  esac
+}
+
+# --------------------------------------------------------------------- verify
+
+cmd_verify() {
+  need_init
+  only=${1:-}
+  ran=0; failed=0
+  run_one() { # kind command
+    k=$1; c=$2
+    [ -n "$only" ] && [ "$only" != "$k" ] && return 0
+    printf '\n--- %s: %s\n' "$k" "$c"
+    out="$F/.verify-$k.log"
+    if ( cd "$P" && sh -c "$c" ) >"$out" 2>&1; then
+      tail -3 "$out"
+      ev_add "$k" pass "$c" "$(tail -1 "$out")"
+      printf '    PASS\n'
+    else
+      rc=$?
+      tail -12 "$out"
+      ev_add "$k" fail "$c" "exit $rc: $(tail -1 "$out")"
+      printf '    FAIL (exit %s), log: %s\n' "$rc" "$out"
+      failed=$((failed + 1))
+    fi
+    ran=$((ran + 1))
+  }
+
+  # explicit overrides win
+  cmds=$(python3 - "$F/config.json" <<'PY' 2>/dev/null || true
+import json,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception: d={}
+for k,v in (d.get("verify") or {}).items(): print(f"{k}\t{v}")
+PY
+)
+  if [ -n "$cmds" ]; then
+    printf '%s\n' "$cmds" | while IFS="$(printf '\t')" read -r k c; do
+      [ -n "$k" ] && run_one "$k" "$c"
+    done
+  elif [ -f "$P/package.json" ]; then
+    pm=npm
+    [ -f "$P/pnpm-lock.yaml" ] && pm=pnpm
+    [ -f "$P/yarn.lock" ] && pm=yarn
+    [ -f "$P/bun.lockb" ] && pm=bun
+    for s in typecheck lint test build; do
+      has=$(S="$s" python3 - "$P/package.json" <<'PY' 2>/dev/null || printf 0
+import json,os,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception: d={}
+print(1 if os.environ["S"] in (d.get("scripts") or {}) else 0)
+PY
+)
+      [ "$has" = "1" ] && run_one "$([ "$s" = test ] && printf test || printf build)" "$pm run $s"
+    done
+  elif [ -f "$P/pyproject.toml" ] || [ -f "$P/pytest.ini" ]; then
+    run_one test "python3 -m pytest -q"
+  elif [ -f "$P/go.mod" ]; then
+    run_one test "go test ./..."
+    run_one build "go build ./..."
+  fi
+
+  if [ "$ran" = "0" ]; then
+    printf 'forge: no verify commands detected.\n'
+    printf '  Add them: "verify": {"test": "<cmd>", "build": "<cmd>"} in .forge/config.json\n'
+    ev_add verify fail "forge verify" "no commands detected"
+    exit 1
+  fi
+  printf '\nforge: %s command(s) run, %s failed\n' "$ran" "$failed"
+  [ "$failed" = "0" ] || exit 1
+}
+
+# ---------------------------------------------------------------------- audit
+
+cmd_audit() {
+  need_init
+  dir="$D/audit-$(date -u +%Y-%m-%d)"
+  mkdir -p "$dir"
+  t=$(tpl_dir)
+  for f in scope findings remediation; do
+    [ -f "$dir/$f.md" ] && continue
+    if [ -n "$t" ] && [ -f "$t/audit/$f.md" ]; then cp "$t/audit/$f.md" "$dir/$f.md"
+    else printf '# %s\n\n_pending_\n' "$f" > "$dir/$f.md"; fi
+  done
+  printf '%s' "$(basename "$dir")" > "$F/active"
+  printf 'forge: audit scaffolded at %s/%s\n' "$DOCS_REL" "$(basename "$dir")"
+  printf 'forge: active workstream set to the audit. Fill scope.md first.\n'
+}
+
+cmd_adr() {
+  need_init
+  [ $# -ge 1 ] || { printf 'usage: forge adr "<decision title>"\n' >&2; exit 2; }
+  title=$*
+  n=$(ls -1 "$D/adr" 2>/dev/null | sed -n 's/^\([0-9][0-9][0-9][0-9]\)-.*/\1/p' | sort | tail -1)
+  if [ -z "$n" ]; then n=1; else n=$(( $(printf '%s' "$n" | sed 's/^0*//') + 1 )); fi
+  f="$D/adr/$(printf '%04d' "$n")-$(slug "$title").md"
+  t=$(tpl_dir)
+  if [ -n "$t" ] && [ -f "$t/adr.md" ]; then
+    TITLE="$title" DATEV="$(date -u +%Y-%m-%d)" python3 - "$t/adr.md" "$f" <<'PY'
+import os,sys
+s=open(sys.argv[1]).read().replace("{{TITLE}}",os.environ["TITLE"]).replace("{{DATE}}",os.environ["DATEV"])
+open(sys.argv[2],"w").write(s)
+PY
+  else
+    printf '# %s\n\n- Date: %s\n- Status: proposed\n\n## Context\n\n## Decision\n\n## Consequences\n' "$title" "$(date -u +%Y-%m-%d)" > "$f"
+  fi
+  printf '%s\n' "${f#"$P/"}"
+}
+
+# ---------------------------------------------------------------- brief/anchor
+
+# The current task: the first unchecked task line in the active plan.
+current_task() {
+  dir=$(active_dir)
+  [ -n "$dir" ] && [ -f "$dir/plan.md" ] || { printf ''; return; }
+  awk '
+    /^[[:space:]]*- \[ \]/ { print; found=1; next }
+    found && /^[[:space:]]+-/ { print; next }
+    found && !/^[[:space:]]+-/ { exit }
+  ' "$dir/plan.md" | head -6
+}
+
+# Full context block. Injected at session start and after compaction.
+cmd_brief() {
+  need_init
+  a=$(active_slug)
+  printf '=== FORGE PROJECT CONTEXT ===\n'
+  printf 'project  : %s\n' "$(basename "$P")"
+  printf 'strict   : %s\n' "$(cfg_get strict)"
+  printf 'active   : %s\n' "${a:-none}"
+  if [ -n "$a" ] && [ -d "$D/$a" ]; then
+    printf 'artifacts: %s/%s/\n' "$DOCS_REL" "$a"
+    for f in research architecture plan test-plan review; do
+      p="$D/$a/$f.md"
+      if [ ! -f "$p" ]; then st="missing"
+      elif grep -q '_pending_' "$p"; then st="PENDING - fill this before moving on"
+      else st="written, read it before deciding anything in its area"; fi
+      printf '  %-15s %s\n' "$f.md" "$st"
+    done
+    printf '\n--- CURRENT TASK (from plan.md) ---\n'
+    t=$(current_task)
+    [ -n "$t" ] && printf '%s\n' "$t" || printf '(no unchecked tasks: either plan.md is empty or the work is done)\n'
+    if [ -f "$D/$a/plan.md" ] && grep -q '^## Out of scope' "$D/$a/plan.md"; then
+      printf '\n--- OUT OF SCOPE (do not drift into these) ---\n'
+      sed -n '/^## Out of scope/,/^## /p' "$D/$a/plan.md" | sed '1d;/^## /d' | sed '/^$/d' | head -8
+    fi
+  fi
+  printf '\n--- GATES ---\n'
+  for g in code done ui; do
+    printf '  %-6s %s\n' "$g" "$(cmd_gate "$g" 2>&1 || true)"
+  done
+  printf '\n--- RECENT EVIDENCE ---\n'
+  grep -v '^#' "$F/evidence.log" 2>/dev/null | tail -6 | awk -F'\t' '{ printf "  %s  %-8s %-5s %s\n", substr($1,6,11), $2, $3, substr($4,1,60) }' || printf '  (none)\n'
+  if [ -d "$P/.continuum" ]; then
+    printf '\nContinuum state is also present in this project (.continuum/). Forge holds the\n'
+    printf 'engineering process for the current change; Continuum holds the project memory\n'
+    printf 'and the cross-session thread. Read both, and keep both current.\n'
+  fi
+  printf '=== END FORGE CONTEXT ===\n'
+}
+
+# Short re-anchor, for mid-session drift as the context window fills.
+cmd_anchor() {
+  need_init
+  a=$(active_slug)
+  [ -n "$a" ] || exit 0
+  printf 'FORGE ANCHOR · workstream %s\n' "$a"
+  t=$(current_task)
+  if [ -n "$t" ]; then
+    printf 'Current task, from %s/%s/plan.md:\n%s\n' "$DOCS_REL" "$a" "$t"
+  fi
+  d=$(task_count "$D/$a/plan.md" done)
+  n=$(task_count "$D/$a/plan.md")
+  printf 'Progress: %s of %s tasks checked off.\n' "$d" "$n"
+  printf 'If what you are doing now is not that task, stop and say so rather than widening the change.\n'
+  printf 'Tick tasks off in plan.md as they pass, so this anchor stays true.\n'
+}
+
+# --------------------------------------------------------------- status/doctor
+
+cmd_status() {
+  need_init
+  a=$(active_slug)
+  printf 'project : %s\n' "$(basename "$P")"
+  printf 'strict  : %s\n' "$(cfg_get strict)"
+  printf 'active  : %s\n' "${a:-none}"
+  if [ -n "$a" ] && [ -d "$D/$a" ]; then
+    for f in research architecture plan test-plan review; do
+      p="$D/$a/$f.md"
+      if [ ! -f "$p" ]; then st="missing"
+      elif grep -q '_pending_' "$p"; then st="pending"
+      else st="written ($(wc -l < "$p" | tr -d ' ') lines)"; fi
+      printf '  %-14s %s\n' "$f.md" "$st"
+    done
+    printf '  tasks         %s done / %s real tasks\n' \
+      "$(task_count "$D/$a/plan.md" done)" "$(task_count "$D/$a/plan.md")"
+  fi
+  printf 'gates   :\n'
+  for g in code done ui; do
+    r=$(cmd_gate "$g" 2>&1 || true)
+    printf '  %-6s %s\n' "$g" "$r"
+  done
+  waiver_active && printf 'waiver  : active until %s\n' "$(cut -f1 "$F/.waiver")" || true
+  printf 'evidence: %s entries\n' "$(grep -cv '^#' "$F/evidence.log" 2>/dev/null || echo 0)"
+}
+
+cmd_doctor() {
+  resolve
+  rc=0
+  printf 'forge %s · %s\n' "$VERSION" "$P"
+  [ -d "$F" ] && printf '  ok    .forge/\n' || { printf '  MISS  .forge/ (run forge init)\n'; rc=1; }
+  [ -d "$D" ] && printf '  ok    %s/\n' "$DOCS_REL" || { printf '  MISS  %s/\n' "$DOCS_REL"; rc=1; }
+  n=$(ls -1 "$D" 2>/dev/null | grep -cE '^[0-9]{3}-' || true)
+  printf '  ok    workstreams: %s\n' "${n:-0}"
+  for s in "$HOME/.claude/settings.json" "$P/.claude/settings.json"; do
+    if [ -f "$s" ] && grep -q 'forge-' "$s" 2>/dev/null; then
+      printf '  ok    hooks wired in %s\n' "${s#"$HOME/"}"
+      found=1
+    fi
+  done
+  [ "${found:-0}" = "1" ] || { printf '  WARN  no forge hooks found in settings.json, gates will not fire\n'; rc=1; }
+  command -v python3 >/dev/null 2>&1 && printf '  ok    python3\n' || { printf '  MISS  python3 (needed for config and verify detection)\n'; rc=1; }
+  exit $rc
+}
+
+cmd_help() {
+  cat <<'EOF'
+forge - engineering gates and artifacts for AI coding sessions
+
+Setup
+  forge init                     create .forge/ and docs/engineering/ here
+  forge strict [on|off]          blocking gates vs advisory gates
+  forge doctor                   check the install
+
+Workstreams (one per feature or change)
+  forge kickoff "<project>"      open the intake: brief + completeness checklist only
+  forge new "<title>"            scaffold research/architecture/plan/test-plan/review
+  forge list                     all workstreams, with plan progress
+  forge use <slug>               set the active workstream
+  forge status                   phases, tasks and gate state
+  forge brief                    full context block (what the session hook injects)
+  forge anchor                   short re-anchor: the current task and nothing else
+  forge adr "<decision>"         new numbered ADR
+  forge audit                    scaffold an audit of an existing codebase
+
+Evidence and gates
+  forge verify [test|build]      run the project's checks, record the result
+  forge evidence add <kind> <pass|fail> "<cmd>" "<summary>"
+  forge evidence list
+  forge gate {code|done|ui}      what the hooks ask: exit 0 pass, 1 fail
+  forge waive <minutes> "<why>"  temporary bypass of the plan gate
+
+Kinds: test, build, lint, browser, api, manual, verify.
+Env: FORGE_PROJECT pins the project root.
+EOF
+}
+
+main() {
+  c=${1:-help}; shift 2>/dev/null || true
+  case $c in
+    init) cmd_init "$@" ;;
+    new) cmd_new "$@" ;;
+    kickoff) cmd_kickoff "$@" ;;
+    use) cmd_use "$@" ;;
+    list|ls) cmd_list ;;
+    status) cmd_status ;;
+    brief) cmd_brief ;;
+    anchor) cmd_anchor ;;
+    gate) cmd_gate "$@" ;;
+    verify) cmd_verify "$@" ;;
+    evidence|ev) cmd_evidence "$@" ;;
+    waive) cmd_waive "$@" ;;
+    strict) cmd_strict "$@" ;;
+    audit) cmd_audit ;;
+    adr) cmd_adr "$@" ;;
+    doctor) cmd_doctor ;;
+    version|--version|-v) printf 'forge %s\n' "$VERSION" ;;
+    help|--help|-h) cmd_help ;;
+    *) printf 'forge: unknown command %s\n' "$c" >&2; cmd_help >&2; exit 2 ;;
+  esac
+}
+
+main "$@"
