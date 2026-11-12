@@ -15,6 +15,9 @@ claim.
 forge audit      # scaffolds scope.md, findings.md, remediation.md
 ```
 
+You run that, and every other command in this skill. The user asked for an
+audit; they should not have to set one up to get one.
+
 **Report, do not fix.** An audit that silently repairs things destroys its own
 evidence and widens its blast radius. Collect findings, then propose the
 remediation order and let the user choose. The exception is a live data-loss or

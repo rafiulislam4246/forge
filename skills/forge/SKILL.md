@@ -23,7 +23,14 @@ forge status      # active workstream, phase state, gate state
 forge brief       # the full context block, if the session hook did not inject it
 ```
 
-If the project has no `.forge/`, run `forge init` before writing product code.
+If the project has no `.forge/`, run `forge init` yourself, now, and carry on.
+
+**You run every `forge` command in this system. Never hand one to the user to
+type, never make an answer wait on them running something, and never present
+setup as a prerequisite they must do first.** The user describes what they want
+in ordinary words; translating that into commands is your job. The only thing
+that is ever theirs to do is a decision: approving a brief, choosing what to
+fix, or confirming something risky.
 If `.continuum/` is also present, read its state too: Continuum holds the
 project's memory across sessions, Forge holds the process for the current
 change. Neither replaces the other.

@@ -24,6 +24,9 @@ are the two intake files below, which exist to hold the conversation.
 
 ### 1. Open the intake
 
+You run this, not the user. They describe the project in ordinary words; turning
+that into commands is your job, and they should never be asked to type one.
+
 ```sh
 forge kickoff "<project name>"
 ```
