@@ -24,6 +24,7 @@ request ──→ research ──→ architecture ──→ plan ──→ tests
 ├── forge/bin/forge              the CLI: POSIX sh, no dependencies
 ├── forge/hooks/                 7 hooks, the enforcement layer
 ├── skills/forge*/               5 skills: intake, build, audit, verify, router
+├── skills/<discipline>/         16 engineering skills shipped in skills-library/
 └── settings.json                hook wiring, merged into whatever is there
 
 your-project/
@@ -45,9 +46,16 @@ cd forge
 ```
 
 `--global` wires the hooks for every project on the machine. `--skills` also
-restores the engineering discipline skills into `~/.claude/skills` so they
-auto-trigger, and makes the `/stack` router model-invocable if it was set to
-user-only. Settings are backed up and merged, never replaced.
+installs the 16 engineering discipline skills from this repo's `skills-library/`
+into `~/.claude/skills` so they auto-trigger (test-driven-development,
+planning-and-task-breakdown, spec-driven and source-driven development,
+api-and-interface-design, documentation-and-adrs, code-review-and-quality,
+doubt-driven-development, debugging-and-error-recovery,
+browser-testing-with-devtools, frontend-ui-engineering, shipping-and-launch,
+incremental-implementation, code-simplification, context-engineering,
+interview-me), and makes the `/stack` router model-invocable if it was set to
+user-only. A fresh clone is therefore complete: no other machine's files are
+needed. Settings are backed up and merged, never replaced.
 
 Then, in any project:
 

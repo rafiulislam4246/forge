@@ -115,7 +115,10 @@ shipping-and-launch code-simplification context-engineering interview-me"
   moved=0; missing=""
   for s in $SET; do
     [ -d "$dest/$s" ] && continue
-    for src in "$HOME/.claude/skills_DELETED_2026-11-01/$s" \
+    # The repo's own copy comes first, so a fresh clone on any machine is
+    # complete. Local backups are only a fallback for an older install.
+    for src in "$SRC/skills-library/$s" \
+               "$HOME/.claude/skills_DELETED_2026-11-01/$s" \
                "$HOME/.claude/_disabled_skills/$s" \
                "$HOME/.claude/skills_FULLBACKUP_2026-11-01/$s" \
                "$HOME/.claude/skills-library/$s"; do
@@ -127,7 +130,7 @@ shipping-and-launch code-simplification context-engineering interview-me"
     done
     [ -d "$dest/$s" ] || missing="$missing $s"
   done
-  printf '  ok  ~/.claude/skills: %s discipline skill(s) restored\n' "$moved"
+  printf '  ok  ~/.claude/skills: %s discipline skill(s) installed\n' "$moved"
   [ -n "$missing" ] && printf '  !!  not found anywhere:%s\n' "$missing"
   # The router must be callable by the model, not only by the user.
   stack="$HOME/.claude/skills/stack/SKILL.md"
