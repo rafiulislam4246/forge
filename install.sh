@@ -97,7 +97,8 @@ install_skills_dir() {
     [ -d "$s" ] || continue
     name=$(basename "$s")
     mkdir -p "$dest/$name"
-    cp "$s"/*.md "$dest/$name/" 2>/dev/null || true
+    # -R so a skill's scripts/ and references/ travel with its SKILL.md
+    cp -R "$s". "$dest/$name/" 2>/dev/null || cp "$s"/*.md "$dest/$name/" 2>/dev/null || true
   done
   printf '  ok  %s/forge*\n' "$(printf '%s' "$dest" | sed "s|$HOME|~|")"
 }
